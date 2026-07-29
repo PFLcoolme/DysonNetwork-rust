@@ -1,0 +1,79 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/solsynth",
+    "crates/solsynth-auth",
+    "crates/solsynth-db",
+    "crates/solsynth-grpc",
+    "crates/solsynth-utils",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "AGPL-3.0"
+authors = ["StarFurr"]
+repository = "https://cnb.cool/starfurr/starfur"
+
+[workspace.dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# Web framework
+axum = { version = "0.8", features = ["macros", "multipart"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "cors", "compression-full"] }
+
+# gRPC
+tonic = "0.12"
+tonic-build = "0.12"
+tokio-graceful = "0.2"
+
+# Database
+sqlx = { version = "0.8", features = ["runtime-tokio-native-tls", "mysql", "macros", "migrate", "time", "uuid"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# UUID
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Auth
+argon2 = "0.5"
+jsonwebtoken = "9"
+
+# NATS
+async-nats = "0.38"
+
+# Redis
+redis = { version = "0.27", features = ["tokio-comp", "json"] }
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "cookies"] }
+
+# Config
+config = "0.14"
+
+# Cache
+moka = { version = "0.12", features = ["future"] }
+
+# OpenTelemetry
+opentelemetry = "0.28"
+opentelemetry-otlp = "0.28"
+opentelemetry-sdk = "0.28"
+tracing-opentelemetry = "0.29"
+
+# Other
+thiserror = "2"
+regex = "1"
+url = "2"
+dashmap = "6"
+dotenvy = "0.15"

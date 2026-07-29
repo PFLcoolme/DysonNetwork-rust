@@ -1,0 +1,23 @@
+[package]
+name = "solsynth-auth"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+solsynth-db = { path = "solsynth-db" }
+solsynth-utils = { path = "solsynth-utils" }
+
+tokio.workspace = true
+axum.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+argon2.workspace = true
+jsonwebtoken.workspace = true
+reqwest.workspace = true
+tracing.workspace = true
+thiserror.workspace = true

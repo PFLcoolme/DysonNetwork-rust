@@ -1,0 +1,71 @@
+# SolSynth 默认配置
+
+server:
+  host: "0.0.0.0"
+  port: 8080
+  workers: 4
+
+database:
+  host: "127.0.0.1"
+  port: 3306
+  database: "solsynth"
+  user: "root"
+  password: ""
+  max_connections: 10
+
+cache:
+  enabled: true
+  host: "127.0.0.1"
+  port: 6379
+  password: ""
+  max_connections: 10
+
+queue:
+  host: "127.0.0.1"
+  port: 4222
+  user: "nats"
+  password: ""
+
+grpc:
+  address: "0.0.0.0:50051"
+  reflection_enabled: true
+
+auth:
+  jwt_secret: ""
+  access_token_expiry: 3600      # 1 hour
+  refresh_token_expiry: 604800   # 7 days
+  cookie_domain: ""
+
+webauthn:
+  rp_id: "localhost"
+  rp_name: "SolSynth"
+  related_origins:
+    - "https://localhost"
+
+oidc_providers:
+  google:
+    client_id: ""
+    client_secret: ""
+    issuer: "https://accounts.google.com"
+  apple:
+    client_id: ""
+    client_secret: ""
+    issuer: "https://appleid.apple.com"
+  github:
+    client_id: ""
+    client_secret: ""
+    issuer: "https://github.com"
+  microsoft:
+    client_id: ""
+    client_secret: ""
+    issuer: "https://login.microsoftonline.com"
+  discord:
+    client_id: ""
+    client_secret: ""
+    issuer: "https://discord.com"
+  afdian:
+    client_id: ""
+    client_secret: ""
+    issuer: ""
+  steam:
+    api_key: ""
