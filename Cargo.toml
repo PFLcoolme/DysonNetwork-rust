@@ -6,6 +6,7 @@ members = [
     "crates/solsynth-db",
     "crates/solsynth-grpc",
     "crates/solsynth-utils",
+    "crates/solsynth-sphere",
     "crates/starfur-gateway",
 ]
 
@@ -83,6 +84,7 @@ regex = "1"
 url = "2"
 dashmap = "6"
 dotenvy = "0.15"
+lazy_static = "1"
 
 # Auth extensions
 axum-extra = { version = "0.10", features = ["cookie", "signed-cookie"] }

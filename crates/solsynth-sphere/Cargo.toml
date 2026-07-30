@@ -1,0 +1,35 @@
+[package]
+name = "solsynth-sphere"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+solsynth-db = { path = "../solsynth-db" }
+solsynth-utils = { path = "../solsynth-utils" }
+
+anyhow.workspace = true
+async-trait.workspace = true
+tokio.workspace = true
+axum.workspace = true
+axum-extra = { workspace = true, features = ["cookie"] }
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+regex.workspace = true
+url.workspace = true
+reqwest.workspace = true
+base64.workspace = true
+lazy_static.workspace = true
+activitypub_federation = { version = "0.6", features = ["axum"] }
+sqlx.workspace = true
+humantime = "2.1"
+
+[features]
+default = []
+test-utils = ["activitypub_federation/test-utils"]

@@ -11,6 +11,7 @@ solsynth-auth = { path = "../solsynth-auth" }
 solsynth-db = { path = "../solsynth-db" }
 solsynth-grpc = { path = "../solsynth-grpc" }
 solsynth-utils = { path = "../solsynth-utils" }
+solsynth-sphere = { path = "../solsynth-sphere" }
 
 tokio.workspace = true
 axum.workspace = true
