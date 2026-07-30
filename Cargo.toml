@@ -9,6 +9,7 @@ members = [
     "crates/solsynth-sphere",
     "crates/solsynth-storage",
     "crates/solsynth-mail",
+    "crates/solsynth-marketplace",
     "crates/starfur-gateway",
     "crates/starfur-messager",
 ]
@@ -105,4 +106,5 @@ rcgen = "0.13"
 
 # ORM
 sea-orm = { version = "1.1", features = ["sqlx/mysql", "runtime-tokio-native-tls", "macros", "with-uuid", "with-chrono"] }
-sea-orm-migration = "1.1"
+sea-orm
+-migration = "1.1"

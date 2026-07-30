@@ -1,0 +1,37 @@
+[package]
+name = "solsynth-marketplace"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+solsynth-db = { path = "../solsynth-db" }
+solsynth-utils = { path = "../solsynth-utils" }
+solsynth-storage = { path = "../solsynth-storage" }
+
+anyhow.workspace = true
+async-trait.workspace = true
+tokio.workspace = true
+axum.workspace = true
+axum-extra = { workspace = true, features = ["jaxson", "cookie"] }
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+regex.workspace = true
+url.workspace = true
+
+# Payment
+stripe = { version = "8", features = ["retail"] }
+decimal = "2"
+
+# OAuth
+oauth2 = "5"
+
+[features]
+default = []
+test-utils = []
