@@ -1,0 +1,329 @@
+# SolSynth 部署指南
+
+## 📋 目录
+
+- [环境要求](#环境要求)
+- [本地开发环境](#本地开发环境)
+- [Docker 部署](#docker-部署)
+- [Kubernetes 部署](#kubernetes-部署)
+- [配置说明](#配置说明)
+- [监控与日志](#监控与日志)
+
+## 环境要求
+
+### 最小配置
+
+- CPU: 4 核心
+- 内存: 8 GB
+- 存储: 50 GB SSD
+- 操作系统: Linux (Ubuntu 20.04
+
++)
+
+### 生产配置- CPU: 8+ 核心
+- 内存: 16+ GB
+- 存储: 200+ GB SSD (RAID 10)
+- 操作系统: Linux (Ubuntu 22.04 LTS)
+
+## 本地开发环境
+
+### 1. 安装依赖
+
+```bash
+# 安装 Rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# 安装 MySQL
+sudo apt install mysql-server
+
+# 安装 Redis
+sudo apt install redis-server
+
+# 安装 NATS Server
+wget https://github.com/nats-io/nats-server/releases/download/v2.10.0/nats-server-v2.10.0-linux-amd64.zip
+unzip nats-server-v2.10.0-linux-amd64.zip
+sudo cp nats-server-v2.10.0-linux-amd64/nats-server /usr/local/bin/
+```
+
+### 2. 初始化数据库
+
+```bash
+# 创建数据库
+mysql -u root -p -e "CREATE DATABASE solsynth CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+
+# 运行迁移
+cargo run -p solsynth-db migrate
+```
+
+### 3. 配置环境变量
+
+```bash
+cp config/default.yaml config/local.yaml
+```
+
+编辑 `config/local.yaml`：
+
+```yaml
+server:
+  host: "127.0.0.1"
+  port: 8080
+
+database:
+  host: "127.0.0.1"
+  port: 3306
+  username: "root"
+  password: ""
+  database: "solsynth"
+
+redis:
+  url: "redis://127.0.0.1:6379"
+
+nats:
+  urls: ["nats://127.0.0.1:4222"]
+```
+
+### 4. 启动服务
+
+```bash
+# 启动 NATS
+nats-server
+
+# 启动 Redis
+sudo systemctl start redis
+
+# 启动 MySQL
+sudo systemctl start mysql
+
+# 启动主服务
+cargo run -p solsynth
+
+# 启动 API Gateway (另一个终端)
+cargo run -p starfur-gateway
+```
+
+## Docker 部署
+
+### 1. 构建镜像
+
+```bash
+# 构建所有服务
+docker build -t solsynth:latest -f Dockerfile .
+
+# 构建特定服务
+docker build -t solsynth-auth:latest -f Dockerfiles/Dockerfile.auth .
+docker build -t solsynth-gateway:latest -f Dockerfiles/Dockerfile.gateway .
+```
+
+### 2. Docker Compose
+
+创建 `docker-compose.yml`:
+
+```yaml
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpassword
+      MYSQL_DATABASE: solsynth
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  nats:
+    image: nats:latest
+    ports:
+      - "4222:4222"
+
+  solsynth:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: mysql://root:rootpassword@mysql:3306/solsynth
+      REDIS_URL: redis://redis:6379
+      NATS_URLS: nats://nats:4222
+    depends_on:
+      - mysql
+      - redis
+      - nats
+    ports:
+      - "8080:8080"
+
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfiles/Dockerfile.gateway
+    environment:
+      UPSTREAM_URL: http://solsynth:8080
+    depends_on:
+      - solsynth
+    ports:
+      - "80:80"
+
+volumes:
+  mysql_data:
+```
+
+启动服务：
+
+```bash
+docker-compose up -d
+```
+
+## Kubernetes 部署
+
+### 1. 创建命名空间
+
+```bash
+kubectl create namespace solsynth
+```
+
+### 2. 创建 ConfigMap
+
+```yaml
+# configmap.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: solsynth-config
+  namespace: solsynth
+data:
+  config.yaml: |
+    server:
+      host: "0.0.0.0"
+      port: 8080
+    database:
+      host: "mysql"
+      port: 3306
+      username: "solsynth"
+      database: "solsynth"
+    redis:
+      url: "redis://redis:6379"
+    nats:
+      urls: ["nats://nats:4222"]
+```
+
+### 3. 创建 Deployment
+
+```yaml
+# deployment.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: solsynth
+  namespace: solsynth
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: solsynth
+  template:
+    metadata:
+      labels:
+        app: solsynth
+    spec:
+      containers:
+      - name: solsynth
+        image: solsynth:latest
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: config
+          mountPath: /app/config
+      volumes:
+      - name: config
+        configMap:
+          name: solsynth-config
+```
+
+### 4. 创建 Service
+
+```yaml
+# service.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: solsynth
+  namespace: solsynth
+spec:
+  selector:
+    app: solsynth
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 8080
+  type: LoadBalancer
+```
+
+### 5. 应用配置
+
+```bash
+kubectl apply -f configmap.yaml
+kubectl apply -f deployment.yaml
+kubectl apply -f service.yaml
+```
+
+## 配置说明
+
+### 环境变量
+
+| 变量 | 说明 | 默认值 |
+|------|------|--------|
+| `DATABASE_URL` | 数据库连接字符串 | `mysql://solsynth:solsynth@localhost:3306/solsynth` |
+| `REDIS_URL` | Redis 连接字符串 | `redis://localhost:6379` |
+| `NATS_URLS` | NATS 服务器地址 | `nats://localhost:4222` |
+| `JWT_SECRET` | JWT 签名密钥 | 必需 |
+| `FCM_PROJECT_ID` | Firebase 项目 ID | - |
+| `FCM_CREDENTIALS` | Firebase 凭证 JSON | - |
+| `STRIPE_SECRET_KEY` | Stripe 密钥 | - |
+
+### 配置文件优先级
+
+1. 环境变量 (最高)
+2. `config/local.yaml`
+3. `config/default.yaml` (最低)
+
+## 监控与日志
+
+### 日志配置
+
+```yaml
+logging:
+  level: info
+  format: json
+  output: stdout
+```
+
+### 健康检查
+
+```bash
+# 服务健康检查
+curl http://localhost:8080/health
+
+# API Gateway 健康检查
+curl http://localhost:80/health
+```
+
+### 指标监控
+
+集成 OpenTelemetry，支持 Prometheus 和 Grafana。
+
+```yaml
+# prometheus.yml
+scrape_configs:
+  - job_name: 'solsynth'
+    static_configs:
+      - targets: ['solsynth:9090']
+```
+
+## 📝 许可证
+
+AGPL-3.0
