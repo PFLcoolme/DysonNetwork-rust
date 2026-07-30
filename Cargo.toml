@@ -8,6 +8,7 @@ members = [
     "crates/solsynth-utils",
     "crates/solsynth-sphere",
     "crates/starfur-gateway",
+    "crates/starfur-messager",
 ]
 
 [workspace.package]
