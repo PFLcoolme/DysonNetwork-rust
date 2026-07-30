@@ -7,9 +7,11 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
-solsynth-db = { path = "solsynth-db" }
-solsynth-utils = { path = "solsynth-utils" }
+solsynth-db = { path = "../solsynth-db" }
+solsynth-utils = { path = "../solsynth-utils" }
 
+anyhow.workspace = true
+async-trait.workspace = true
 tokio.workspace = true
 axum.workspace = true
 serde.workspace = true

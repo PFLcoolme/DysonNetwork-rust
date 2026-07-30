@@ -16,8 +16,7 @@ pub struct GrpcConfig {
 impl Default for GrpcConfig {
     fn default() -> Self {
         Self {
-            address: std::env::var("GRPC_ADDRESS")
-                .unwrap_or_else(|_| "0.0.0.0:50051".to_string()),
+            address: std::env::var("GRPC_ADDRESS").unwrap_or_else(|_| "0.0.0.0:50051".to_string()),
             reflection_enabled: true,
         }
     }
@@ -38,8 +37,8 @@ impl GrpcClientFactory {
     pub fn create_channel(target: &str) -> tonic::transport::Channel {
         tracing::info!("创建 gRPC 通道: {}", target);
         // TODO: 实现共享通道管理
-        tonic::transport::Channel::from_static(target)
-            .connect_lazy()
+        tonic::transport::Endpoint::from_shared(target.to_owned())
             .expect("failed to create gRPC channel")
+            .connect_lazy()
     }
 }

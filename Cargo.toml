@@ -6,6 +6,7 @@ members = [
     "crates/solsynth-db",
     "crates/solsynth-grpc",
     "crates/solsynth-utils",
+    "crates/starfur-gateway",
 ]
 
 [workspace.package]
@@ -20,7 +21,9 @@ repository = "https://cnb.cool/starfurr/starfur"
 tokio = { version = "1", features = ["full"] }
 
 # Web framework
-axum = { version = "0.8", features = ["macros", "multipart"] }
+axum = { version = "0.8", features = ["macros", "multipart", "http2"] }
+hyper = { version = "1", features = ["client", "http1", "http2"] }
+hyper-util = { version = "0.1", features = ["client", "client-legacy", "http1", "http2", "tokio"] }
 tower = "0.5"
 tower-http = { version = "0.6", features = ["trace", "cors", "compression-full"] }
 
@@ -30,7 +33,7 @@ tonic-build = "0.12"
 tokio-graceful = "0.2"
 
 # Database
-sqlx = { version = "0.8", features = ["runtime-tokio-native-tls", "mysql", "macros", "migrate", "time", "uuid"] }
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-native-tls", "mysql", "macros", "migrate", "time", "uuid"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -41,7 +44,7 @@ chrono = { version = "0.4", features = ["serde"] }
 
 # Logging
 tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 # UUID
 uuid = { version = "1", features = ["v4", "serde"] }
@@ -72,6 +75,9 @@ opentelemetry-sdk = "0.28"
 tracing-opentelemetry = "0.29"
 
 # Other
+anyhow = "1"
+async-trait = "0.1"
+rand = "0.8"
 thiserror = "2"
 regex = "1"
 url = "2"

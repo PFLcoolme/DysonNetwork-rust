@@ -1,11 +1,11 @@
 //! 数据库模块
-//! 
+//!
 //! 功能:
 //! - MySQL 连接池管理
 //! - 数据库迁移
 //! - 基础 CRUD 操作
 
-use sqlx::MySqlPool;
+use sqlx::{Connection, MySqlPool};
 use tracing::info;
 
 /// 数据库连接池
@@ -16,23 +16,24 @@ pub struct DatabasePool {
 impl DatabasePool {
     /// 创建新的数据库连接池
     pub async fn new(dsn: &str) -> Result<Self, anyhow::Error> {
-        info
-        
-!("正在连接到数据库: {}", dsn);        let pool = MySqlPool::connect(dsn).await?;
-        
+        info!("正在连接到数据库: {}", dsn);
+        let pool = MySqlPool::connect(dsn).await?;
+
         // 验证连接
-        pool.ping().await?;
-        
+        let mut connection = pool.acquire().await?;
+        connection.ping().await?;
+        drop(connection);
+
         info!("数据库连接成功");
-        
+
         Ok(Self { pool })
     }
-    
+
     /// 获取连接池引用
     pub fn pool(&self) -> &MySqlPool {
         &self.pool
     }
-    
+
     /// 运行数据库迁移
     pub async fn run_migrations(&self, migration_dir: &str) -> Result<(), anyhow::Error> {
         info!("正在运行数据库迁移: {}", migration_dir);
@@ -41,8 +42,8 @@ impl DatabasePool {
     }
 }
 
-
-/// 数据库配置pub struct DbConfig {
+/// 数据库配置
+pub struct DbConfig {
     pub host: String,
     pub port: u16,
     pub database: String,

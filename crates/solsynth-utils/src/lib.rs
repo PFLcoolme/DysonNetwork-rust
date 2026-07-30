@@ -14,16 +14,16 @@ use thiserror::Error;
 pub enum AppError {
     #[error("数据库错误: {0}")]
     Database(#[from] anyhow::Error),
-    
+
     #[error("认证失败: {0}")]
     Auth(String),
-    
+
     #[error("无效请求: {0}")]
     InvalidRequest(String),
-    
+
     #[error("资源未找到: {0}")]
     NotFound(String),
-    
+
     #[error("内部错误: {0}")]
     Internal(String),
 }
@@ -89,11 +89,18 @@ pub fn generate_random_string(length: usize) -> String {
 /// 将字符串转为 snake_case
 pub fn to_snake_case(s: &str) -> String {
     let mut result = String::new();
-    for (i, c) in s.chars().enumerate() {
-        if i > 0 && c.is_uppercase() {
+    let characters: Vec<char> = s.chars().collect();
+    for (index, current) in characters.iter().copied().enumerate() {
+        let previous = index.checked_sub(1).and_then(|value| characters.get(value));
+        let next = characters.get(index + 1);
+        let starts_word = current.is_uppercase()
+            && (previous.is_some_and(|value| value.is_lowercase() || value.is_numeric())
+                || previous.is_some_and(|value| value.is_uppercase())
+                    && next.is_some_and(|value| value.is_lowercase()));
+        if starts_word && !result.ends_with('_') {
             result.push('_');
         }
-        result.push(c.to_lowercase().next().unwrap());
+        result.extend(current.to_lowercase());
     }
     result
 }

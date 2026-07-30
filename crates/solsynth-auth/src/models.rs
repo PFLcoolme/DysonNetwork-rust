@@ -8,10 +8,10 @@ use uuid::Uuid;
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Account {
     pub id: Uuid,
-    pub name: String,          // 用户名
-    pub nick: String,          // 昵称
-    pub language: String,      // 语言 (en-US, zh-Hans)
-    pub region: String,        // 地区
+    pub name: String,     // 用户名
+    pub nick: String,     // 昵称
+    pub language: String, // 语言 (en-US, zh-Hans)
+    pub region: String,   // 地区
     pub is_superuser: bool,
     pub activated_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
@@ -104,6 +104,6 @@ pub struct TokenResponse {
     pub token: String,
     pub refresh_token: String,
     pub expires_in: i64,
-       pub refresh_expires_in: i64,
- pub token_type: String,
+    pub refresh_expires_in: i64,
+    pub token_type: String,
 }

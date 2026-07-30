@@ -1,0 +1,28 @@
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
+    environment:
+      STARFUR_BIND_ADDR: 0.0.0.0:8080
+      STARFUR_EXTERNAL_SCHEME: ${STARFUR_EXTERNAL_SCHEME:-http}
+      STARFUR_RATE_LIMIT_PER_MINUTE: ${STARFUR_RATE_LIMIT_PER_MINUTE:-600}
+      STARFUR_UPSTREAM_TIMEOUT_SECONDS: ${STARFUR_UPSTREAM_TIMEOUT_SECONDS:-30}
+      STARFUR_UPSTREAM_PADLOCK: ${STARFUR_UPSTREAM_PADLOCK:-http://host.docker.internal:5101}
+      STARFUR_UPSTREAM_PASSPORT: ${STARFUR_UPSTREAM_PASSPORT:-http://host.docker.internal:5102}
+      STARFUR_UPSTREAM_SPHERE: ${STARFUR_UPSTREAM_SPHERE:-http://host.docker.internal:5103}
+      STARFUR_UPSTREAM_MESSAGER: ${STARFUR_UPSTREAM_MESSAGER:-http://host.docker.internal:5104}
+      STARFUR_UPSTREAM_RING: ${STARFUR_UPSTREAM_RING:-http://host.docker.internal:5105}
+      STARFUR_UPSTREAM_WALLET: ${STARFUR_UPSTREAM_WALLET:-http://host.docker.internal:5106}
+      STARFUR_UPSTREAM_DEVELOP: ${STARFUR_UPSTREAM_DEVELOP:-http://host.docker.internal:5107}
+      STARFUR_UPSTREAM_STORAGE: ${STARFUR_UPSTREAM_STORAGE:-http://host.docker.internal:5108}
+      STARFUR_UPSTREAM_PUSH: ${STARFUR_UPSTREAM_PUSH:-http://host.docker.internal:5109}
+      STARFUR_UPSTREAM_MAIL: ${STARFUR_UPSTREAM_MAIL:-http://host.docker.internal:5110}
+      STARFUR_UPSTREAM_WORKSPACE: ${STARFUR_UPSTREAM_WORKSPACE:-http://host.docker.internal:5111}
+      STARFUR_UPSTREAM_WEBSOCKET: ${STARFUR_UPSTREAM_WEBSOCKET:-}
+      RUST_LOG: ${RUST_LOG:-starfur_gateway=info}
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    ports:
+      - "8080:8080"
+    restart: unless-stopped

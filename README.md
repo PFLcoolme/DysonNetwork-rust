@@ -65,3 +65,7 @@ cp config/default.yaml config/local.yaml
 ## 许可证
 
 AGPL-3.0
+
+## API Gateway
+
+Rust Gateway 位于 `crates/starfur-gateway`，提供旧路由兼容、流式反向代理、WebSocket 透传和基础限流。运行方式与路由表见 `docs/GATEWAY.md`。

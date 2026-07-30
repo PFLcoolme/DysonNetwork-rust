@@ -1,5 +1,5 @@
 [package]
-name = "solsynth-utils"
+name = "starfur-gateway"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -7,11 +7,13 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
-anyhow.workspace = true
-rand.workspace = true
+axum.workspace = true
+hyper.workspace = true
+hyper-util.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-uuid.workspace = true
-chrono.workspace = true
-regex.workspace = true
 thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+url.workspace = true

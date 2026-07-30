@@ -1,9 +1,7 @@
 //! HTTP 请求处理器
 
-use axum::{extract::State, http::StatusCode, response::IntoResponse, Json};
+use axum::{http::StatusCode, response::IntoResponse};
 use serde::{Deserialize, Serialize};
-
-use crate::services::AuthService;
 
 /// 登录请求
 #[derive(Debug, Deserialize)]

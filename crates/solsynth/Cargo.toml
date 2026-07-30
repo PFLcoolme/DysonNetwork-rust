@@ -7,10 +7,10 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
-solsynth-auth = { path = "solsynth-auth" }
-solsynth-db = { path = "solsynth-db" }
-solsynth-grpc = { path = "solsynth-grpc" }
-solsynth-utils = { path = "solsynth-utils" }
+solsynth-auth = { path = "../solsynth-auth" }
+solsynth-db = { path = "../solsynth-db" }
+solsynth-grpc = { path = "../solsynth-grpc" }
+solsynth-utils = { path = "../solsynth-utils" }
 
 tokio.workspace = true
 axum.workspace = true

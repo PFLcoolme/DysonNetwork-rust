@@ -1,10 +1,8 @@
 //! 认证服务层
 
+use crate::models::{Account, AuthChallenge, AuthSession, TokenResponse};
 use async_trait::async_trait;
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
-
-use crate::models::{Account, AuthSession, AuthChallenge, TokenResponse};
 
 /// 认证服务接口
 #[async_trait]
@@ -35,10 +33,7 @@ pub trait AuthService: Send + Sync {
     ) -> Result<TokenResponse, anyhow::Error>;
 
     /// 刷新 Token
-    async fn refresh_tokens(
-        &self,
-        refresh_token: &str,
-    ) -> Result<TokenResponse, anyhow::Error>;
+    async fn refresh_tokens(&self, refresh_token: &str) -> Result<TokenResponse, anyhow::Error>;
 
     /// 撤销会话
     async fn revoke_session(&self, session_id: Uuid) -> Result<(), anyhow::Error>;
