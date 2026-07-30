@@ -4,9 +4,12 @@
 //! - MySQL 连接池管理
 //! - 数据库迁移
 //! - 基础 CRUD 操作
+//! - 消息相关实体和服务
 
 use sqlx::{Connection, MySqlPool};
 use tracing::info;
+
+pub mod message;
 
 /// 数据库连接池
 pub struct DatabasePool {
