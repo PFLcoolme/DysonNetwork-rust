@@ -8,6 +8,7 @@ members = [
     "crates/solsynth-utils",
     "crates/solsynth-sphere",
     "crates/solsynth-storage",
+    "crates/solsynth-mail",
     "crates/starfur-gateway",
     "crates/starfur-messager",
 ]
