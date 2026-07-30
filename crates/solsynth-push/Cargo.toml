@@ -14,7 +14,7 @@ anyhow.workspace = true
 async-trait.workspace = true
 tokio.workspace = true
 axum.workspace = true
-axum-extra = { workspace = true, features = ["jaxson", "cookie"] }
+axum-extra = { workspace = true, features = ["cookie"] }
 serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true
@@ -25,8 +25,8 @@ regex.workspace = true
 url.workspace = true
 
 # Push notifications
-fcm = "0.14"
-firebase-admin = "0.9"
+# fcm = "0.14" # TODO: Replace with available FCM SDK
+# firebase-admin = "0.9" # TODO: Replace with available Firebase Admin SDK
 
 # WebSocket
 tokio-tungstenite = "0.24"

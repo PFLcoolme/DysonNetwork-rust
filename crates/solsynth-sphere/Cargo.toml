@@ -32,4 +32,4 @@ humantime = "2.1"
 
 [features]
 default = []
-test-utils = ["activitypub_federation/test-utils"]
+test-utils = []

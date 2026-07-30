@@ -136,10 +136,10 @@ pub async fn nodeinfo_discovery() -> impl IntoResponse {
             "href": "https://api.starfur.test/sphere/nodeinfo/2.0"
         }]
     })
-
 }
 
-/// ActivityPub Inboxpub async fn inbox(
+/// ActivityPub Inbox
+pub async fn inbox(
     State(_context): State<SphereContext>,
     _request: axum::extract::Request,
 ) -> impl IntoResponse {

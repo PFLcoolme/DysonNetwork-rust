@@ -116,12 +116,12 @@ impl Actor for SphereActor {
         
         diesel::update(actors::table)
             .filter(actors::id.eq(model.id))
-            .
-set((                actors::name.eq(model.name),
+            .set((
+                actors::name.eq(model.name),
                 actors::display_name.eq(model.display_name),
                 actors::summary.eq(model.summary),
-                actors::updated_at.eq(U
-           tc::now()), ))
+                actors::updated_at.eq(Utc::now()),
+            ))
             .execute(&mut conn)
             .map_err(|e| anyhow::anyhow!(e.to_string()))?;
         

@@ -6,7 +6,6 @@ members = [
     "crates/solsynth-db",
     "crates/solsynth-grpc",
     "crates/solsynth-utils",
-    "crates/solsynth-sphere",
     "crates/solsynth-storage",
     "crates/solsynth-mail",
     "crates/solsynth-marketplace",
@@ -60,10 +59,10 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 
 # UUID
-uuid = { version = "1", features = ["v4", "serde"] }
+uuid = { version = "1", features = ["v4", "v7", "serde"] }
 
 # Auth
-argon2 = "0.5"
+argon2 = { version = "0.5", features = ["std", "simple"] }
 jsonwebtoken = "9"
 
 # NATS
@@ -88,6 +87,8 @@ opentelemetry-sdk = "0.28"
 tracing-opentelemetry = "0.29"
 
 # Other
+futures = "0.3"
+
 anyhow = "1"
 async-trait = "0.1"
 thiserror = "2"
@@ -99,12 +100,12 @@ lazy_static = "1"
 sha2 = "0.10"
 
 # Auth extensions
-axum-extra = { version = "0.10", features = ["cookie", "signed-cookie"] }
+axum-extra = { version = "0.10", features = ["cookie", "cookie-signed"] }
 base64 = "0.22"
 webauthn-rs = { version = "0.5", features = ["private", "hyper"] }
 webauthn-rs-proto = "0.5"
 rcgen = "0.13"
 
 # ORM
-sea-orm = { version = "1.1", features = ["sqlx/mysql", "runtime-tokio-native-tls", "macros", "with-uuid", "with-chrono"] }
+sea-orm = { version = "1.1", features = ["sqlx-mysql", "runtime-tokio-native-tls", "macros", "with-uuid", "with-chrono"] }
 sea-orm-migration = "1.1"

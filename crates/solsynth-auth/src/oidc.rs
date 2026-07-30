@@ -1,8 +1,8 @@
-//! OID
-C (OpenID Connect) 第三方登录支持//!
-//!  支持: Google, Apple, GitHub, Discord等
+//! OIDC (OpenID Connect) 第三方登录支持
+//! 支持: Google, Apple, GitHub, Discord等
 
 use anyhow::Result;
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
@@ -101,7 +101,7 @@ pub async fn verify_id_token(id_token: &str, provider: &OidcProvider) -> Result<
     let jwks_url = provider.jwks_url.as_ref().ok_or_else(|| anyhow::anyhow!("Provider does not support JWKS"))?;
     
     let client = reqwest::Client::new();
-    let jwks: serde_json::Value = client.get(jwks_url).send().await?.json(). await?;
+    let jwks: serde_json::Value = client.get(jwks_url).send().await?.json().await?;
 
     // 解析 JWT header获取 key_id
     let parts: Vec<&str> = id_token.split('.').collect();
@@ -109,14 +109,14 @@ pub async fn verify_id_token(id_token: &str, provider: &OidcProvider) -> Result<
         return Err(anyhow::anyhow!("Invalid ID token format"));
     }
     
-    let header = base64::decode_config(parts[0], base64::URL_SAFE_NO_PAD)?;
+    let header = URL_SAFE_NO_PAD.decode(parts[0])?;
     let header: serde_json::Value = serde_json::from_slice(&header)?;
     let key_id = header.get("kid").and_then(|v| v.as_str()).unwrap_or("");
 
     // 查找匹配的公钥并验证 (简化实现)
     tracing::debug!(%key_id, "验证 ID Token");
     
-    let payload = base64::decode_config(parts[1], base64::URL_SAFE_NO_PAD)?;
+    let payload = URL_SAFE_NO_PAD.decode(parts[1])?;
     let claims: serde_json::Value = serde_json::from_slice(&payload)?;
     
     Ok(claims)

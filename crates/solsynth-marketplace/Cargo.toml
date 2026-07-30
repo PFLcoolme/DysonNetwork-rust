@@ -15,7 +15,7 @@ anyhow.workspace = true
 async-trait.workspace = true
 tokio.workspace = true
 axum.workspace = true
-axum-extra = { workspace = true, features = ["jaxson", "cookie"] }
+axum-extra = { workspace = true, features = ["cookie"] }
 serde.workspace = true
 serde_json.workspace = true
 uuid.workspace = true
@@ -26,7 +26,7 @@ regex.workspace = true
 url.workspace = true
 
 # Payment
-stripe = { version = "8", features = ["retail"] }
+# stripe = { version = "8", features = ["retail"] } # TODO: Replace with actual payment SDK
 decimal = "2"
 
 # OAuth

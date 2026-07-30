@@ -11,7 +11,7 @@ solsynth-auth = { path = "../solsynth-auth" }
 solsynth-db = { path = "../solsynth-db" }
 solsynth-grpc = { path = "../solsynth-grpc" }
 solsynth-utils = { path = "../solsynth-utils" }
-solsynth-sphere = { path = "../solsynth-sphere" }
+# solsynth-sphere = { path = "../solsynth-sphere" }  // TODO: 修复后恢复
 
 tokio.workspace = true
 axum.workspace = true
@@ -23,3 +23,4 @@ dotenvy.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 config.workspace = true
+sea-orm.workspace = true

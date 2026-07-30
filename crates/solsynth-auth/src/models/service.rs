@@ -2,14 +2,16 @@
 
 use anyhow::Context;
 use async_trait::async_trait;
-use chrono::{TimeDelta, Utc};
+use chrono::{DateTime, NaiveDateTime, TimeDelta, Utc};
 use jsonwebtoken as jwt;
+use password_hash::{PasswordHasher, PasswordHash, SaltString, PasswordVerifier};
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use tracing::{info, warn};
 
 use super::entity::{accounts, account_secrets, account_auth_factor, auth_session, auth_challenge};
+use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter};
 
 /// JWT 配置
 #[derive(Clone, Debug)]
@@ -23,8 +25,8 @@ impl Default for JwtConfig {
     fn default() -> Self {
         Self {
             secret: std::env::var("AUTH_JWT_SECRET").unwrap_or_else(|_| "change-me-in-production".to_string()),
-            access_expiry: TimeDelta::seconds(3600),      // 1 hour
-            refresh_expiry: TimeDelta::seconds(604800),   // 7 days
+            access_expiry: TimeDelta::seconds(3600),
+            refresh_expiry: TimeDelta::seconds(604800),
         }
     }
 }
@@ -40,13 +42,22 @@ pub struct TokenResponse {
 }
 
 /// 密码哈希参数
-const PASSWORD_HASH_COST: u32 = 3; //  argon2 的迭代次数
+const PASSWORD_HASH_COST: u32 = 3;
+const MEMORY_COST_KB: u32 = 64 * 1024;
+const PARALLELISM: u32 = 4;
 
-///认证服务实现
+/// 认证服务实现
 #[derive(Clone)]
 pub struct AuthService {
     pub db: sea_orm::DatabaseConnection,
     pub jwt_config: JwtConfig,
+}
+
+/// 认证状态（用于 axum State）
+#[derive(Clone)]
+pub struct AuthState {
+    pub auth_service: AuthService,
+    pub cookie_name: String,
 }
 
 impl AuthService {
@@ -54,40 +65,43 @@ impl AuthService {
         Self { db, jwt_config }
     }
 
+    fn argon2_instance() -> argon2::Argon2<'static> {
+        let params = argon2::Params::new(
+            MEMORY_COST_KB,
+            PARALLELISM,
+            PASSWORD_HASH_COST,
+            None,
+        ).unwrap();
+        argon2::Argon2::new(
+            argon2::Algorithm::Argon2id,
+            argon2::Version::V0x10,
+            params,
+        )
+    }
+
     /// 注册新用户
     pub async fn register(&self, name: &str, password: &str) -> Result<Uuid, AuthError> {
-        // 检查用户名是否已存在
-        use sea_orm::EntityTrait;
         let existing = accounts::Entity::find()
             .filter(accounts::Column::Name.eq(name))
             .one(&self.db)
             .await?;
-        
+
         if existing.is_some() {
             return Err(AuthError::AlreadyExists("username".to_string()));
         }
 
-        // 密码哈希
-        let hashed_password = argon2::hash_encoded(
-            password.as_bytes(),
-            &rand::thread_rng().gen::<[u8; 16]>(),
-            argon2::Argon2::new(
-                argon2::Algorithm::Argon2id,
-                argon2::Version::0x600,
-                argon2::Params::new(
-                    argon2::MemorySize::new(65536), // 64MB
-                    4, // 并行度
-                    PASSWORD_HASH_COST,
-                    None,
-                ).unwrap(),
-                None,
-            ).unwrap(),
-        ).unwrap();
+        let salt = SaltString::generate(&mut rand::thread_rng());
+        let argon2 = Self::argon2_instance();
+        let hashed_password = argon2
+            .hash_password(password.as_bytes(), &salt)
+            .map_err(|e| AuthError::Database(sea_orm::error::DbErr::Custom(
+                format!("Failed to hash password: {}", e)
+            )))?
+            .to_string();
 
         let account_id = Uuid::now_v7();
         let now = Utc::now();
 
-        // 创建账户
         let account = accounts::ActiveModel {
             id: sea_orm::ActiveValue::Set(account_id),
             name: sea_orm::ActiveValue::Set(name.to_string()),
@@ -95,43 +109,38 @@ impl AuthService {
             language: sea_orm::ActiveValue::Set("zh-Hans".to_string()),
             region: sea_orm::ActiveValue::Set("CN".to_string()),
             is_superuser: sea_orm::ActiveValue::Set(false),
-            activated_at: sea_orm::ActiveValue::Set(Some(now)),
-            created_at: sea_orm::ActiveValue::Set(now),
-            updated_at: sea_orm::ActiveValue::Set(now),
+            activated_at: sea_orm::ActiveValue::Set(Some(now.naive_utc())),
+            created_at: sea_orm::ActiveValue::Set(now.naive_utc()),
+            updated_at: sea_orm::ActiveValue::Set(now.naive_utc()),
         };
         account.insert(&self.db).await?;
 
-        // 创建密码密钥
         let secret = account_secrets::ActiveModel {
             id: sea_orm::ActiveValue::Set(Uuid::now_v7()),
             account_id: sea_orm::ActiveValue::Set(account_id),
             secret_type: sea_orm::ActiveValue::Set("password".to_string()),
             secret_value: sea_orm::ActiveValue::Set(hashed_password),
-            enabled_at: sea_orm::ActiveValue::Set(Some(now)),
-            created_at: sea_orm::ActiveValue::Set(now),
+            enabled_at: sea_orm::ActiveValue::Set(Some(now.naive_utc())),
+            created_at: sea_orm::ActiveValue::Set(now.naive_utc()),
         };
         secret.insert(&self.db).await?;
 
-        info!(
-%account_id, %name, "用户注册成功");        Ok(account_id)
+        info!(%account_id, %name, "用户注册成功");
+        Ok(account_id)
     }
 
     /// 验证密码并返回账户 ID
     pub async fn verify_password(&self, name: &str, password: &str) -> Result<Uuid, AuthError> {
-       
-        
- use sea_orm::EntityTrait;        // 查找账户
         let account = accounts::Entity::find()
             .filter(accounts::Column::Name.eq(name))
             .one(&self.db)
             .await?
             .ok_or(AuthError::InvalidCredentials)?;
 
-        if !account.activated_at.is_some() {
+        if account.activated_at.is_none() {
             return Err(AuthError::AccountNotActivated);
         }
 
-        // 查找密码密钥
         let secret = account_secrets::Entity::find()
             .filter(account_secrets::Column::AccountId.eq(account.id))
             .filter(account_secrets::Column::SecretType.eq("password"))
@@ -139,44 +148,13 @@ impl AuthService {
             .await?
             .ok_or(AuthError::InvalidCredentials)?;
 
-        // 验证密码
-        if !argon2::verify_encoded(&secret.secret_value, password.as_bytes()) {
-            warn!(%account.id, "密码验证失败");
-            return Err(AuthError::InvalidCredentials);
-        }
+        let stored_hash = PasswordHash::new(&secret.secret_value)
+            .map_err(|_| AuthError::InvalidCredentials)?;
 
-        // 检查是否需要重新哈希（参数更新时）
-        if argon2::needs_rehash(&secret.secret_value, argon2::Argon2::new(
-            argon2::Algorithm::Argon2id,
-            argon2::Version::0x600,
-            argon2::Params::new(
-                argon2::MemorySize::new(65536),
-                4,
-                PASSWORD_HASH_COST,
-                None,
-            ).unwrap(),
-            None,
-        ).unwrap()) {
-            let hashed = argon2::hash_encoded(
-                password.as_bytes(),
-                &rand::thread_rng().gen::<[u8; 16]>(),
-                argon2::Argon2::new(
-                    argon2::Algorithm::Argon2id,
-                    argon2::Version::0x600,
-                    argon2::Params::new(
-                        argon2::MemorySize::new(65536),
-                        4,
-                        PASSWORD_HASH_COST,
-                        None,
-                    ).unwrap(),
-                    None,
-                ).unwrap(),
-            ).unwrap();
-            
-            let mut update = account_secrets::ActiveModel::from(secret);
-            update.secret_value = sea_orm::ActiveValue::Set(hashed);
-            update.update(&self.db).await.ok();
-        }
+        let argon2 = Self::argon2_instance();
+        argon2
+            .verify_password(password.as_bytes(), &stored_hash)
+            .map_err(|_| AuthError::InvalidCredentials)?;
 
         Ok(account.id)
     }
@@ -189,18 +167,13 @@ impl AuthService {
         device_name: Option<String>,
         platform: &str,
     ) -> Result<TokenResponse, AuthError> {
-        use sea_orm::EntityTrait;
-
         let now = Utc::now();
         let access_expires = now + self.jwt_config.access_expiry;
         let refresh_expires = now + self.jwt_config.refresh_expiry;
 
-        // 签发 Access Token
         let access_token = self.issue_token(account_id, true, &access_expires)?;
-        // 签发 Refresh Token
         let refresh_token = self.issue_token(account_id, false, &refresh_expires)?;
 
-        // 存储会话
         let session = auth_session::ActiveModel {
             id: sea_orm::ActiveValue::Set(Uuid::now_v7()),
             account_id: sea_orm::ActiveValue::Set(account_id),
@@ -208,11 +181,11 @@ impl AuthService {
             device_name: sea_orm::ActiveValue::Set(device_name),
             platform: sea_orm::ActiveValue::Set(platform.to_string()),
             access_token: sea_orm::ActiveValue::Set(access_token.clone()),
-            access_expires_at: sea_orm::ActiveValue::Set(access_expires),
+            access_expires_at: sea_orm::ActiveValue::Set(access_expires.naive_utc()),
             refresh_token: sea_orm::ActiveValue::Set(refresh_token.clone()),
-            refresh_expires_at: sea_orm::ActiveValue::Set(refresh_expires),
-            created_at: sea_orm::ActiveValue::Set(now),
-            expired_at: sea_orm::ActiveValue::Set(refresh_expires),
+            refresh_expires_at: sea_orm::ActiveValue::Set(refresh_expires.naive_utc()),
+            created_at: sea_orm::ActiveValue::Set(now.naive_utc()),
+            expired_at: sea_orm::ActiveValue::Set(refresh_expires.naive_utc()),
         };
         session.insert(&self.db).await?;
 
@@ -229,10 +202,9 @@ impl AuthService {
 
     /// 签发 JWT Token
     fn issue_token(&self, account_id: Uuid, is_access: bool, expires_at: &DateTime<Utc>) -> Result<String, AuthError> {
-        let issuer = "solsynth-auth";
-        let mut claims = TokenClaims {
+        let claims = TokenClaims {
             sub: account_id.to_string(),
-            iss: issuer.to_string(),
+            iss: "solsynth-auth".to_string(),
             exp: expires_at.timestamp(),
             nbf: Utc::now().timestamp(),
             iat: Utc::now().timestamp(),
@@ -249,13 +221,11 @@ impl AuthService {
 
     /// 验证并解码 JWT Token
     pub fn verify_token(&self, token: &str) -> Result<TokenClaims, AuthError> {
-        let token_data = jwt::decode::<TokenClaims>(
+        jwt::decode::<TokenClaims>(
             token,
             &jwt::DecodingKey::from_secret(self.jwt_config.secret.as_bytes()),
             &jwt::Validation::default(),
-        ).map_err(AuthError::TokenError)?;
-
-        Ok(token_data.claims)
+        ).map_err(AuthError::TokenError).map(|d| d.claims)
     }
 
     /// 刷新 Token
@@ -268,15 +238,13 @@ impl AuthService {
 
         let account_id = Uuid::parse_str(&claims.sub).map_err(|_| AuthError::InvalidToken)?;
 
-        // 检查账户是否存在
-        use sea_orm::EntityTrait;
         let account = accounts::Entity::find()
             .filter(accounts::Column::Id.eq(account_id))
             .one(&self.db)
             .await?
             .ok_or(AuthError::AccountNotFound)?;
 
-        if !account.activated_at.is_some() {
+        if account.activated_at.is_none() {
             return Err(AuthError::AccountNotActivated);
         }
 
@@ -285,30 +253,28 @@ impl AuthService {
 
     /// 撤销会话
     pub async fn revoke_session(&self, session_id: Uuid) -> Result<(), AuthError> {
-        use        sea_orm::EntityTrait;
- let session = auth_session::Entity::find()
+        let session = auth_session::Entity::find()
             .filter(auth_session::Column::Id.eq(session_id))
             .one(&self.db)
             .await?
             .ok_or(AuthError::SessionNotFound)?;
 
-        sea_orm::ActiveModelTrait::delete(session.into_active_model()).await?;
+        let session_active: auth_session::ActiveModel = session.into();
+        session_active.delete(&self.db).await?;
         Ok(())
     }
 
-    /// 创建认证挑战 (用于多因素认证)
+    /// 创建认证挑战
     pub async fn create_challenge(
         &self,
         account_id: Uuid,
         device_id: String,
         platform: &str,
     ) -> Result<auth_challenge::Model, AuthError> {
-        use sea_orm::EntityTrait;
-
         let now = Utc::now();
         let expired_at = now + TimeDelta::minutes(5);
 
-        let account = accounts::Entity::find()
+        let _account = accounts::Entity::find()
             .filter(accounts::Column::Id.eq(account_id))
             .one(&self.db)
             .await?
@@ -325,26 +291,24 @@ impl AuthService {
             step_total: sea_orm::ActiveValue::Set(2),
             step_remain: sea_orm::ActiveValue::Set(2),
             failed_attempts: sea_orm::ActiveValue::Set(0),
-            expired_at: sea_orm::ActiveValue::Set(Some(expired_at)),
+            expired_at: sea_orm::ActiveValue::Set(Some(expired_at.naive_utc())),
             approved_at: sea_orm::ActiveValue::Set(None),
             declined_at: sea_orm::ActiveValue::Set(None),
-            created_at: sea_orm::ActiveValue::Set(now),
+            created_at: sea_orm::ActiveValue::Set(now.naive_utc()),
         };
 
         let result = challenge.insert(&self.db).await?;
         info!(%result.id, "认证挑战创建成功");
-
-
         Ok(result)
-    }    /// 添加认证因子 (2FA)
+    }
+
+    /// 添加认证因子 (2FA)
     pub async fn add_auth_factor(
         &self,
         account_id: Uuid,
         factor_type: &str,
         factor_data: &str,
     ) -> Result<Uuid, AuthError> {
-        use sea_orm::EntityTrait;
-
         let now = Utc::now();
         let factor_id = Uuid::now_v7();
 
@@ -353,9 +317,9 @@ impl AuthService {
             account_id: sea_orm::ActiveValue::Set(account_id),
             factor_type: sea_orm::ActiveValue::Set(factor_type.to_string()),
             factor_data: sea_orm::ActiveValue::Set(factor_data.to_string()),
-            enabled_at: sea_orm::ActiveValue::Set(Some(now)),
+            enabled_at: sea_orm::ActiveValue::Set(Some(now.naive_utc())),
             trustworthy: sea_orm::ActiveValue::Set(1),
-            created_at: sea_orm::ActiveValue::Set(now),
+            created_at: sea_orm::ActiveValue::Set(now.naive_utc()),
         };
 
         factor.insert(&self.db).await?;
@@ -369,8 +333,6 @@ impl AuthService {
         factor_type: &str,
         data: &str,
     ) -> Result<bool, AuthError> {
-        use sea_orm::EntityTrait;
-
         let factor = account_auth_factor::Entity::find()
             .filter(account_auth_factor::Column::AccountId.eq(account_id))
             .filter(account_auth_factor::Column::FactorType.eq(factor_type))
@@ -381,7 +343,7 @@ impl AuthService {
     }
 }
 
- /// JWT Token声明
+/// JWT Token 声明
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TokenClaims {
     pub sub: String,
@@ -399,28 +361,28 @@ pub struct TokenClaims {
 pub enum AuthError {
     #[error("数据库错误: {0}")]
     Database(#[from] sea_orm::error::DbErr),
-    
+
     #[error("Token 错误: {0}")]
-    TokenError(#[from] jwt::errors::JwtError),
-    
+    TokenError(#[from] jwt::errors::Error),
+
     #[error("无效的凭据")]
     InvalidCredentials,
-    
+
     #[error("账户未激活")]
     AccountNotActivated,
-    
-    #[error("账户不存在: {0}")]
+
+    #[error("账户不存在")]
     AccountNotFound,
-    
+
     #[error("{0} 已存在")]
     AlreadyExists(String),
-    
+
     #[error("无效的 Token 类型")]
     InvalidTokenType,
-    
+
     #[error("无效的 Token")]
     InvalidToken,
-    
+
     #[error("会话不存在")]
     SessionNotFound,
 }
