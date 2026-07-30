@@ -1,0 +1,39 @@
+[package]
+name = "solsynth-push"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+solsynth-db = { path = "../solsynth-db" }
+solsynth-utils = { path = "../solsynth-utils" }
+
+anyhow.workspace = true
+async-trait.workspace = true
+tokio.workspace = true
+axum.workspace = true
+axum-extra = { workspace = true, features = ["jaxson", "cookie"] }
+serde.workspace = true
+serde_json.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+tracing.workspace = true
+thiserror.workspace = true
+regex.workspace = true
+url.workspace = true
+
+# Push notifications
+fcm = "0.14"
+firebase-admin = "0.9"
+
+# WebSocket
+tokio-tungstenite = "0.24"
+
+# NATS for cross-node delivery
+async-nats.workspace = true
+
+[features]
+default = []
+test-utils = []
