@@ -1,31 +1,63 @@
-//! SolSynth - Rust 重构的 Solar Network 服务端
+//! SolSynth - DyonNetwork Rust 重构主程序入口
 //!
-//! 基于 DysonNetwork 项目的 Rust 重写实现
+//! 启动所有核心服务:
+//! - Padlock 认证服务
+//! - 未来可扩展其他服务
 
-use tracing::info;
+use std::sync::Arc;
+
+use axum::Router;
+use tokio::select;
+use tracing::{info, level_filters::LevelFilter};
+use tracing_subscriber::Layer;
+
+use solsynth_auth::{AuthState, JwtConfig};
 
 #[tokio::main]
-async fn main() {
-    //初始化日志
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::from_default_env()
-                .add_directive("solsynth=info".parse().unwrap()),
-        )
+async fn main() -> anyhow::Result<()> {
+    // 初始化 Tracing
+    let fmt_layer = tracing_subscriber::fmt::layer()
+        .with_target(false)
+        .with_level(true);
+
+    let env_filter = tracing_subscriber::filter::EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info"))
+        .add_directive(LevelFilter::INFO.into());
+
+    tracing_subscriber::registry()
+        .with(fmt_layer)
+        .with(env_filter)
         .init();
 
-    info!("Sol   Synth 正在启动...");
-    info!("服务: 认证 | 用户 | 内容 | 消息 | 通话 | 支付 | 开发者");
+    info!("正在启动 SolSynth 服务...");
 
-    // TODO: 加载配置
-    // TODO: 初始化数据库连接
-    // TODO: 启动 gRPC 服务
-    // TODO: 启动 HTTP 服务
+    // 初始化数据库连接
+    let db_url = std::env::var("DATABASE_URL")
+        .unwrap_or_else(|_| "mysql://root:@127.0.0.1:3306/solsynth".to_string());
 
-    info!("SolSynth 启动完成!"); // 保持运行
-    tokio::signal::ctrl_c()
-        .await
-        .expect("failed to listen for event");
+    let pool = sqlx::MySqlPool::connect(&db_url).await?;
+    info!("数据库连接成功");
 
-    info!("SolSynth 正在关闭...");
+    // 初始化认证服务
+    let jwt_config = JwtConfig::default();
+    let auth_service = models::service::AuthService::new(pool, jwt_config);
+    let auth_state = AuthState {
+        auth_service,
+        jwt_config,
+        cookie_name: "solsynth_session".to_string(),
+    };
+
+    // 构建认证服务路由
+    let auth_router = Router::new()
+        .nest("/auth", handlers::routes(auth_state.clone()))
+        .into_make_service();
+
+    // 启动认证服务 (Padlock)
+    let auth_addr = "0.0.0.0:5101";
+    info!(%auth_addr, "Padlock 认证服务启动");
+
+    let listener = tokio::net::TcpListener::bind(auth_addr).await?;
+    axum::serve(listener, auth_router).await?;
+
+    Ok(())
 }
