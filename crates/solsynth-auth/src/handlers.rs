@@ -12,7 +12,7 @@ use cookie::{Cookie, SameSite};
 use serde::{Deserialize, Serialize};
 use tracing::info;
 
-use crate::models::service::{AuthState, AuthService, TokenResponse};
+use crate::models::service::{AuthState, TokenResponse};
 
 /// 登录请求
 #[derive(Debug, Deserialize)]

@@ -7,17 +7,18 @@ use tokio::sync::mpsc;
 use tracing::{info, error};
 use uuid::Uuid;
 
-use crate::models::{PushNotification, PushDevice, PushChannel};
+use crate::models::{PushDevice, PushNotification};
 
 /// WebSocket 连接
 pub struct WebSocketConnection {
     pub connection_id: Uuid,
     pub user_id: Uuid,
-       pub device: PushDevice,
- pub sender: mpsc::Sender<PushNotification>,
+    pub device: PushDevice,
+    pub sender: mpsc::Sender<PushNotification>,
 }
 
 /// WebSocket 推送管理器
+#[derive(Clone)]
 pub struct WebSocketPushManager {
     connections: std::sync::Arc<tokio::sync::RwLock<std::collections::HashMap<Uuid, WebSocketConnection>>>,
 }

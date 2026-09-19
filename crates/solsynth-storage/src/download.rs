@@ -3,15 +3,13 @@
 use anyhow::Result;
 use axum::{
     body::Body,
-    extract::Path,
+    extract::Request,
     http::{header, StatusCode},
     response::Response,
-    Request,
 };
-use std::path::PathBuf;
 use uuid::Uuid;
 
-use crate::upload::{StorageConfig, StorageManager};
+use crate::upload::StorageManager;
 
 /// 下载文件
 pub async fn download_file(
@@ -47,7 +45,7 @@ pub async fn download_file(
 
 /// 流式下载文件
 pub async fn stream_download_file(
-    request: Request,
+    _request: Request,
     storage_manager: StorageManager,
     owner_id: Uuid,
     file_id: Uuid,
@@ -123,10 +121,10 @@ pub async fn range_download_file(
 
     let file = tokio::fs::File::open(&path).await?;
     let mut reader = tokio::io::BufReader::new(file);
-    use tokio::io::AsyncSeekExt;
-   
+    use tokio::io::{AsyncReadExt, AsyncSeekExt};
 
- reader.seek(std::io::SeekFrom::Start(start)).await?;    let mut buffer = vec![0u8; content_length as usize];
+    reader.seek(std::io::SeekFrom::Start(start)).await?;
+    let mut buffer = vec![0u8; content_length as usize];
     reader.read_exact(&mut buffer).await?;
 
     let response = Response::builder()

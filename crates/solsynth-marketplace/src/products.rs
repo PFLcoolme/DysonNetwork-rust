@@ -6,9 +6,10 @@ use anyhow::Result;
 use tracing::{info, error};
 use uuid::Uuid;
 
-use crate::models::{Product, ProductType, ProductStatus, CreateProductRequest, UpdateProductRequest};
+use crate::models::{Product, ProductStatus, CreateProductRequest, UpdateProductRequest};
 
 /// 商品管理器
+#[derive(Clone)]
 pub struct ProductManager {
     products: std::sync::Arc<tokio::sync::RwLock<std::collections::HashMap<Uuid, Product>>>,
 }
@@ -54,7 +55,7 @@ impl ProductManager {
     pub async fn update_product(&self, product_id: Uuid, req: UpdateProductRequest) -> Result<Product> {
         let mut products = self.products.write().await;
         
-        if let Some(mut product) = products.get_mut(&product_id) {
+        if let Some(product) = products.get_mut(&product_id) {
             if let Some(name) = req.name {
                 product.name = name;
             }

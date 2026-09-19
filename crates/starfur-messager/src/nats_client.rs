@@ -3,10 +3,14 @@
 //! 使用 NATS 实现消息的异步推送和广播
 
 use async_nats::Client;
-use tokio::sync::Mutex;
+use futures::StreamExt;
 use std::sync::OnceLock;
+use tokio::sync::Mutex;
 
 use crate::models::{Message, WsFrame};
+
+/// 全局单例
+static INSTANCE: OnceLock<NatsClient> = OnceLock::new();
 
 /// NATS 主题
 pub mod topics {
@@ -28,12 +32,9 @@ pub struct NatsClient {
 }
 
 impl NatsClient {
-    /// 全局单例
-    static INSTANCE: OnceLock<Self> = OnceLock::new();
-
     /// 获取全局实例
     pub fn instance() -> &'static Self {
-        Self::INSTANCE.get_or_init(|| Self {
+        INSTANCE.get_or_init(|| Self {
             client: Mutex::new(None),
         })
     }
@@ -42,16 +43,17 @@ impl NatsClient {
     pub async fn init() -> anyhow::Result<()> {
         let nats_url = std::env::var("NATS_URL").unwrap_or_else(|_| "nats://127.0.0.1:4222".to_string());
 
+        tracing::info!("正在连接 NATS: {}", nats_url);
         let client = async_nats::connect(nats_url).await?;
 
-        tracing::info!("NATS 连接成功: {}", nats_url);
+        tracing::info!("NATS 连接成功");
 
         // 订阅消息推送主题
         let mut subscriber = client.subscribe(topics::MESSAGE_PUSH.to_string()).await?;
 
         // 在后台任务中处理消息
         tokio::spawn(async move {
-            while let Ok(msg) = subscriber.next().await {
+            while let Some(msg) = subscriber.next().await {
                 tracing::info!("收到 NATS 消息: {:?}", msg.subject);
                 // TODO: 处理消息转发逻辑
             }
@@ -129,7 +131,7 @@ impl NatsClient {
         let client = instance.client().await;
 
         match client {
-            Some(ref cx) => cx.is_connected(),
+            Some(ref cx) => cx.connection_state() == async_nats::connection::State::Connected,
             None => false,
         }
     }

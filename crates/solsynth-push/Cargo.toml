@@ -13,7 +13,7 @@ solsynth-utils = { path = "../solsynth-utils" }
 anyhow.workspace = true
 async-trait.workspace = true
 tokio.workspace = true
-axum.workspace = true
+axum = { workspace = true, features = ["ws"] }
 axum-extra = { workspace = true, features = ["cookie"] }
 serde.workspace = true
 serde_json.workspace = true
@@ -33,6 +33,7 @@ tokio-tungstenite = "0.24"
 
 # NATS for cross-node delivery
 async-nats.workspace = true
+dashmap.workspace = true
 
 [features]
 default = []

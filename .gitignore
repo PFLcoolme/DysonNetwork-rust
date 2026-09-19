@@ -15,3 +15,11 @@
 # 操作系统
 .DS_Store
 Thumbs.db
+
+# 密钥与凭据
+.ssh/
+**/.ssh/
+id_ed25519
+id_ed25519_deploy
+*.pem
+*.key

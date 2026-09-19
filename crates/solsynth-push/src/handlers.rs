@@ -8,7 +8,7 @@ use axum::{
 use uuid::Uuid;
 
 use crate::models::{
-    ApiResponse, PushStats, PushNotification, PushDevice,
+    ApiResponse, PushNotification, PushDevice,
     SendPushRequest, RegisterDeviceRequest,
 };
 use crate::push_manager::PushManager;
@@ -126,15 +126,11 @@ async fn unregister_device(
 
 /// WebSocket 连接
 async fn ws_connect(
-    State(state): State<PushState>,
+    State(_state): State<PushState>,
     ws: WebSocketUpgrade,
 ) -> impl axum::response::IntoResponse {
-    ws.on_upgrade(|socket| {
+    ws.on_upgrade(|_socket| async move {
         // 实际实现应处理 WebSocket 消息
-        // 这里仅作为占位符
-        async
- move {
-            // 接收设备注册            // 转发推送通知
-        }
+        // 这里仅作为占位符：接收设备注册、转发推送通知
     })
 }

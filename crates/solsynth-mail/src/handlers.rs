@@ -7,9 +7,7 @@ use axum::{
 };
 use uuid::Uuid;
 
-use crate::models::{
-    ApiResponse, MailStats, SendMailRequest, SmtpConfig,
-};
+use crate::models::{ApiResponse, SendMailRequest};
 use crate::queue::MailQueue;
 use crate::smtp::SmtpClient;
 use crate::templates::TemplateManager;
@@ -18,7 +16,7 @@ use crate::models::{MailMessage, MailType, MailStatus};
 /// API 状态
 #[derive(Clone)]
 pub struct MailState {
-    pub smtp_client: std::sync::Mutex<SmtpClient>,
+    pub smtp_client: std::sync::Arc<tokio::sync::Mutex<SmtpClient>>,
     pub mail_queue: MailQueue,
     pub template_manager: TemplateManager,
 }
@@ -94,7 +92,7 @@ async fn process_queue(
     // 这里简单地触发队列处理
     // 实际实现中应该由后台任务持续处理
 
-    let mut smtp_client = state.smtp_client.lock().unwrap();
+    let mut smtp_client = state.smtp_client.lock().await;
     let mut processed = 0u32;
 
     while let Some((_mail_id, mail)) = state.mail_queue.dequeue() {

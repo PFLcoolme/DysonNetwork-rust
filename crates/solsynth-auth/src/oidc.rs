@@ -101,7 +101,7 @@ pub async fn verify_id_token(id_token: &str, provider: &OidcProvider) -> Result<
     let jwks_url = provider.jwks_url.as_ref().ok_or_else(|| anyhow::anyhow!("Provider does not support JWKS"))?;
     
     let client = reqwest::Client::new();
-    let jwks: serde_json::Value = client.get(jwks_url).send().await?.json().await?;
+    let _jwks: serde_json::Value = client.get(jwks_url).send().await?.json().await?;
 
     // 解析 JWT header获取 key_id
     let parts: Vec<&str> = id_token.split('.').collect();

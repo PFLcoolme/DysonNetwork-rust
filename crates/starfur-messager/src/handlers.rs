@@ -3,26 +3,29 @@
 //! 提供消息发送、接收、已读回执等 HTTP API
 
 use axum::{
-    extract::{Path, Query, State, WebSocketUpgrade},
+    extract::{ws::WebSocket, Path, Query, State, WebSocketUpgrade},
     response::IntoResponse,
     routing::{get, post},
     Json, Router,
 };
+use chrono::{DateTime, NaiveDateTime, Utc};
+use sea_orm::DatabaseConnection;
 use serde::{Deserialize, Serialize};
-use sqlx::MySqlPool;
 use uuid::Uuid;
 
 use crate::models::{
-    CreateMessageRequest, Message, MessageStatus, MessageType, UnreadCount, WsFrame,
+    CreateMessageRequest, Message, MessageType, UnreadCount, WsFrame,
 };
 use crate::websocket::WebSocketManager;
-use solsynth_db::message::{MessageService, MessageType as DbMessageType, MessageStatus as DbMessageStatus};
+use solsynth_db::message::{
+    MessageService, MessageStatus as DbMessageStatus, MessageType as DbMessageType,
+};
 
 /// API 状态
 #[derive(Clone)]
 pub struct MessagerState {
     pub ws_manager: WebSocketManager,
-    pub db_pool: MySqlPool,
+    pub db: DatabaseConnection,
 }
 
 /// 响应结构
@@ -31,6 +34,12 @@ pub struct ApiResponse<T> {
     pub success: bool,
     pub data: Option<T>,
     pub message: Option<String>,
+}
+
+impl<T: Serialize> IntoResponse for ApiResponse<T> {
+    fn into_response(self) -> axum::response::Response {
+        Json(self).into_response()
+    }
 }
 
 impl<T> ApiResponse<T> {
@@ -51,6 +60,11 @@ impl<T> ApiResponse<T> {
     }
 }
 
+/// 将数据库的 NaiveDateTime (UTC) 转换为 DateTime<Utc>
+fn to_utc(naive: NaiveDateTime) -> DateTime<Utc> {
+    DateTime::<Utc>::from_naive_utc_and_offset(naive, Utc)
+}
+
 /// 查询参数 - 获取消息历史
 #[derive(Debug, Deserialize)]
 pub struct MessageHistoryQuery {
@@ -66,7 +80,7 @@ fn default_limit() -> i32 {
 }
 
 /// 注册路由
-pub fn routes(db_pool: MySqlPool, state: MessagerState) -> Router {
+pub fn routes(state: MessagerState) -> Router {
     Router::new()
         .route("/messages", post(send_message))
         .route("/messages/history", get(message_history))
@@ -74,6 +88,30 @@ pub fn routes(db_pool: MySqlPool, state: MessagerState) -> Router {
         .route("/unread/count", get(unread_count))
         .route("/ws", get(ws_upgrade))
         .with_state(state)
+}
+
+/// 将数据库消息模型转换为 API 模型
+fn convert_message(m: &solsynth_db::message::Model) -> Message {
+    Message {
+        id: Uuid::parse_str(&m.id).unwrap_or(Uuid::new_v4()),
+        sender_id: Uuid::parse_str(&m.sender_id).unwrap_or(Uuid::new_v4()),
+        receiver_id: Uuid::parse_str(&m.receiver_id).unwrap_or(Uuid::new_v4()),
+        message_type: m.message_type.into(),
+        content: m.content.clone(),
+        content_type: m.content_type.clone(),
+        status: m.status.into(),
+        created_at: to_utc(m.created_at),
+        updated_at: to_utc(m.updated_at),
+        reply_to: m.reply_to.as_ref().and_then(|s| Uuid::parse_str(s).ok()),
+        attachments: m
+            .attachments
+            .as_ref()
+            .and_then(|v| {
+                v.as_array()
+                    .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+            })
+            .unwrap_or_default(),
+    }
 }
 
 /// 发送消息
@@ -87,7 +125,7 @@ async fn send_message(
     let sender_id = "demo-sender".to_string();
 
     // 创建消息服务
-    let message_service = MessageService::new(state.db_pool.clone());
+    let message_service = MessageService::new(state.db.clone());
 
     // 转换消息类型
     let db_message_type = match req.message_type {
@@ -97,38 +135,32 @@ async fn send_message(
     };
 
     // 存储消息到数据库
-    match message_service.create_message(
-        &sender_id,
-        &req.receiver_id.to_string(),
-        &req.content,
-        db_message_type,
-        &req.content_type,
-        None, // group_id (私聊时)
-        req.reply_to.as_ref().map(|id| id.to_string()).as_deref(),
-        if req.attachments.is_empty() { None } else { Some(req.attachments) },
-    ).await {
+    match message_service
+        .create_message(
+            &sender_id,
+            &req.receiver_id.to_string(),
+            &req.content,
+            db_message_type,
+            &req.content_type,
+            None, // group_id (私聊时)
+            req.reply_to.as_ref().map(|id| id.to_string()).as_deref(),
+            if req.attachments.is_empty() {
+                None
+            } else {
+                Some(req.attachments)
+            },
+        )
+        .await
+    {
         Ok(db_message) => {
             tracing::info!("消息存储成功: {}", db_message.id);
 
             // 构造 WebSocket 消息帧
-            let message = Message {
-                id: Uuid::parse_str(&db_message.id).unwrap_or(Uuid::new_v4()),
-                sender_id: Uuid::parse_str(&db_message.sender_id).unwrap_or(Uuid::new_v4()),
-                receiver_id: Uuid::parse_str(&db_message.receiver_id).unwrap_or(Uuid::new_v4()),
-                message_type: db_message.message_type.into(),
-                content: db_message.content,
-                content_type: db_message.content_type,
-                status: db_message.status.into(),
-                created_at: db_message.created_at,
-                updated_at: db_message.updated_at,
-                reply_to: db_message.reply_to.and_then(|s| Uuid::parse_str(&s).ok()),
-                attachments: db_message.attachments
-                    .and_then(|v| v.as_array().map(|a| a.iter().filter_map(|v| v.as_str().map(String::to_string)).collect()))
-                    .unwrap_or_default(),
-            };
+            let message = convert_message(&db_message);
 
             // 通过 WebSocket 推送给接收者
-            let _ = state.ws_manager
+            state
+                .ws_manager
                 .send_to_user(&db_message.receiver_id, &WsFrame::Message { message })
                 .await;
 
@@ -146,31 +178,23 @@ async fn message_history(
     State(state): State<MessagerState>,
     Query(query): Query<MessageHistoryQuery>,
 ) -> impl IntoResponse {
-    tracing::info!("获取消息历史: conversation={}, limit={}", query.conversation_id, query.limit);
+    tracing::info!(
+        "获取消息历史: conversation={}, limit={}",
+        query.conversation_id,
+        query.limit
+    );
 
-    let message_service = MessageService::new(state.db_pool.clone());
+    let message_service = MessageService::new(state.db.clone());
 
     // 获取 sender_id (TODO: 从认证上下文获取)
     let user_id = "demo-user".to_string();
 
-    match message_service.get_message_history(&user_id, &query.conversation_id, query.limit).await {
+    match message_service
+        .get_message_history(&user_id, &query.conversation_id, query.limit)
+        .await
+    {
         Ok(messages) => {
-            let message_list: Vec<Message> = messages.iter().map(|m| Message {
-                id: Uuid::parse_str(&m.id).unwrap_or(Uuid::new_v4()),
-                sender_id: Uuid::parse_str(&m.sender_id).unwrap_or(Uuid::new_v4()),
-                receiver_id: Uuid::parse_str(&m.receiver_id).unwrap_or(Uuid::new_v4()),
-                message_type: m.message_type.into(),
-                content: m.content.clone(),
-                content_type: m.content_type.clone(),
-                status: m.status.into(),
-                created_at: m.created_at,
-                updated_at: m.updated_at,
-                reply_to: m.reply_to.as_ref().and_then(|s| Uuid::parse_str(s).ok()),
-                attachments: m.attachments
-                    .as_ref()
-                    .and_then(|v| v.as_array().map(|a| a.iter().filter_map(|v| v.as_str().map(String::to_string)).collect()))
-                    .unwrap_or_default(),
-            }).collect();
+            let message_list: Vec<Message> = messages.iter().map(convert_message).collect();
 
             ApiResponse::success(message_list)
         }
@@ -188,12 +212,13 @@ async fn mark_as_read(
 ) -> impl IntoResponse {
     tracing::info!("标记消息为已读: {}", message_id);
 
-    // TODO: 从认证上下文获取 user_id
-    let user_id = "demo-user".to_string();
+    // TODO: 从认证上下文获取 user_id 并校验消息归属
+    let message_service = MessageService::new(state.db.clone());
 
-    let message_service = MessageService::new(state.db_pool.clone());
-
-    match message_service.mark_as_read(&message_id, &user_id).await {
+    match message_service
+        .update_message_status(&message_id, DbMessageStatus::Read)
+        .await
+    {
         Ok(()) => ApiResponse::success("已标记为已读"),
         Err(e) => {
             tracing::error!("标记已读失败: {}", e);
@@ -226,8 +251,11 @@ async fn ws_upgrade(
     request.on_upgrade(move |socket| handle_ws(socket, user_id, state))
 }
 
-async fn handle_ws(socket: axum::extract::WebSocket, user_id: String, state: MessagerState) {
-    let _session_id = WebSocketManager::create_session(user_id.clone(), socket).await;
+async fn handle_ws(socket: WebSocket, user_id: String, state: MessagerState) {
+    let _session_id = state
+        .ws_manager
+        .create_session(user_id.clone(), socket)
+        .await;
 
     tracing::info!("用户 {} 的 WebSocket 连接已建立", user_id);
 
@@ -257,7 +285,7 @@ impl From<MessageType> for i8 {
     }
 }
 
-impl From<i8> for MessageStatus {
+impl From<i8> for crate::models::MessageStatus {
     fn from(value: i8) -> Self {
         match value {
             0 => Self::Sending,

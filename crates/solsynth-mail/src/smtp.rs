@@ -1,24 +1,24 @@
 //! SMTP 客户端
-模块//!
+//!
 //! 负责 SMTP 连接管理和邮件发送
 
 use anyhow::Result;
 use lettre::{
-    Message,
-    SmtpTransport,
-    Transport,
-    MessageBuilder,
-    address::Address,
+    message::{MultiPart, SinglePart},
     transport::smtp::authentication::Credentials,
+    AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
 };
-use tracing::{info, error, warn};
+use tracing::{error, info};
 
-use crate::models::{MailMessage, MailStatus, SmtpConfig};
+use crate::models::{MailMessage, SmtpConfig};
+
+/// SMTP 传输类型
+type SmtpAsyncTransport = AsyncSmtpTransport<Tokio1Executor>;
 
 /// SMTP 客户端
 pub struct SmtpClient {
     config: SmtpConfig,
-    pool: Vec<SmtpTransport>,
+    pool: Vec<SmtpAsyncTransport>,
 }
 
 impl SmtpClient {
@@ -32,22 +32,23 @@ impl SmtpClient {
     }
 
     /// 创建 SMTP 传输
-    fn create_transport(&self) -> Result<SmtpTransport> {
-        let mut builder = SmtpTransport::builder(&self.config.host)
-            .port(self.config.port);
-
-        if self.config.tls {
-            builder = builder.credentials(Credentials::new(
-                self.config.username.clone(),
-                self.config.password.clone(),
-            ));
-        }
+    fn create_transport(&self) -> Result<SmtpAsyncTransport> {
+        let builder = if self.config.tls {
+            SmtpAsyncTransport::starttls_relay(&self.config.host)?
+                .port(self.config.port)
+                .credentials(Credentials::new(
+                    self.config.username.clone(),
+                    self.config.password.clone(),
+                ))
+        } else {
+            SmtpAsyncTransport::builder_dangerous(&self.config.host).port(self.config.port)
+        };
 
         Ok(builder.build())
     }
 
     /// 获取可用连接
-    pub fn get_connection(&mut self) -> Result<SmtpTransport> {
+    pub fn get_connection(&mut self) -> Result<SmtpAsyncTransport> {
         if let Some(conn) = self.pool.pop() {
             Ok(conn)
         } else {
@@ -56,7 +57,7 @@ impl SmtpClient {
     }
 
     /// 释放连接到连接池
-    pub fn release_connection(&mut self, conn: SmtpTransport) {
+    pub fn release_connection(&mut self, conn: SmtpAsyncTransport) {
         if self.pool.len() < self.config.max_connections as usize {
             self.pool.push(conn);
         }
@@ -66,29 +67,30 @@ impl SmtpClient {
     pub async fn send(&mut self, mail: &MailMessage) -> Result<()> {
         info!("发送邮件给: {:?}", mail.to);
 
-        let from = format!("{} <{}>", self.config.from_name, self.config.from_address
-        
-);        let message = Message::builder()
+        let from = format!("{} <{}>", self.config.from_name, self.config.from_address);
+
+        let builder = Message::builder()
             .from(from.parse()?)
             .to(mail.to[0].parse()?)
             .subject(&mail.subject);
 
         let message = if !mail.html_body.is_empty() {
             if let Some(text_body) = &mail.text_body {
-                message.text_part(text_body.to_string())
-                    .html_part(mail.html_body.clone())
-                    .unwrap()
+                builder.multipart(MultiPart::alternative_plain_html(
+                    text_body.clone(),
+                    mail.html_body.clone(),
+                ))?
             } else {
-                message.html(mail.html_body.clone()).unwrap()
+                builder.singlepart(SinglePart::html(mail.html_body.clone()))?
             }
         } else {
-            message.text(mail.text_body.clone().unwrap_or_default()).unwrap()
+            builder.singlepart(SinglePart::plain(
+                mail.text_body.clone().unwrap_or_default(),
+            ))?
         };
 
-        let
- mut transport = self.create_transport()?;        let result = transport.send(&message).await;
-
-        match result {
+        let transport = self.create_transport()?;
+        match transport.send(message).await {
             Ok(_) => {
                 info!("邮件发送成功");
                 Ok(())
@@ -101,7 +103,7 @@ impl SmtpClient {
     }
 
     /// 构建密码重置邮件
-    pub fn build_password_reset_email(email: &str, reset_token: &str) -> (String, String) {
+    pub fn build_password_reset_email(_email: &str, reset_token: &str) -> (String, String) {
         let subject = "重置您的密码".to_string();
         let html_body = format!(
             r#"
@@ -128,7 +130,7 @@ impl SmtpClient {
     }
 
     /// 构建邮件验证邮件
-    pub fn build_email_verification(email: &str, verification_token: &str) -> (String, String) {
+    pub fn build_email_verification(_email: &str, verification_token: &str) -> (String, String) {
         let subject = "验证您的邮箱".to_string();
         let html_body = format!(
             r#"
@@ -140,7 +142,7 @@ impl SmtpClient {
                     <a href="{}/verify-email?token={}" style="background-color: #2196F3; color: white; padding: 14px 20px; text-decoration: none; border-radius: 4px;">验证邮箱</a>
                     <p>或者访问以下链接：</p>
                     <p>https://app.solsynth.com/verify-email?token={}</p>
-                    <p>此链接将在 24 小时后过期。</p>
+                    <p>此邮件将在 24 小时后过期。</p>
                     <br>
                     <p>Solsynth 团队</p>
                 </body>

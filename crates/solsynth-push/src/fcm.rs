@@ -3,12 +3,13 @@
 //! 负责与 Firebase Cloud Messaging API 交互
 
 use anyhow::Result;
-use tracing::{info, error};
-use uuid::Uuid;
+use tracing::{error, info};
 
-use crate::models::{PushNotification, PushDevice, PushChannel};
+use crate::models::{PushDevice, PushNotification};
 
 /// FCM 客户端
+#[derive(Clone)]
+#[allow(dead_code)]
 pub struct FcmClient {
     project_id: String,
     credentials: String,
@@ -26,7 +27,7 @@ impl FcmClient {
     }
 
     /// 发送单条推送
-    pub async fn send_to_device(&self, device: &PushDevice, notification: &PushNotification) -> Result<()> {
+    pub async fn send_to_device(&self, device: &PushDevice, _notification: &PushNotification) -> Result<()> {
         info!("发送 FCM 推送到设备: {} (用户: {})", device.device_id, device.user_id);
 
         // 模拟 FCM API 调用
@@ -43,9 +44,8 @@ impl FcmClient {
 
     /// 批量发送推送
     pub async fn send_to_devices(&self, devices: &[PushDevice], notification: &PushNotification) -> Result<usize> {
-        info!("批量发送
-
- FCM 推送给 {} 个设备", devices.len());        let mut success_count = 0;
+        info!("批量发送 FCM 推送给 {} 个设备", devices.len());
+        let mut success_count = 0;
         for device in devices {
             match self.send_to_device(device, notification).await {
                 Ok(_) => success_count += 1,
@@ -53,9 +53,13 @@ impl FcmClient {
             }
         }
 
-        info!("批量 
-             推送完成: 成功 {}/{}, 失败: {}", success_count, devices.len(), devices.len() - success_count);
-        
+        info!(
+            "批量推送完成: 成功 {}/{}, 失败: {}",
+            success_count,
+            devices.len(),
+            devices.len() - success_count
+        );
+
         Ok(success_count)
     }
 
@@ -69,8 +73,8 @@ impl FcmClient {
         Ok(())
     }
 
-   
- /// 测试推送    pub async fn send_test_push(&self) -> Result<String> {
+    /// 测试推送
+    pub async fn send_test_push(&self) -> Result<String> {
         info!("发送测试推送");
         Ok("test_message_id".to_string())
     }
@@ -83,6 +87,7 @@ impl Default for FcmClient {
 }
 
 /// 推送服务
+#[derive(Clone)]
 pub struct PushService {
     fcm_client: FcmClient,
 }

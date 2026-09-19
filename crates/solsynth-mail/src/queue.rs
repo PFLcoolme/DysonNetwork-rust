@@ -5,7 +5,6 @@
 use anyhow::Result;
 use dashmap::DashMap;
 use std::sync::Arc;
-use tokio::sync::Mutex;
 use tracing::{info, error, warn};
 use uuid::Uuid;
 
@@ -18,7 +17,6 @@ pub struct MailQueue {
     stats: Arc<MailQueueStats>,
 }
 
-#[derive(Clone)]
 struct MailQueueStats {
     queued: std::sync::atomic::AtomicU64,
     sending: std::sync::atomic::AtomicU64,
@@ -51,9 +49,8 @@ impl MailQueue {
             crate::models::MailType::System => 8,
         };
 
-        mail_message.status = MailStatus
-
-::Queued;        let queue_item = QueueItem {
+        mail_message.status = MailStatus::Queued;
+        let queue_item = QueueItem {
             mail_id,
             priority,
             scheduled_at: None,

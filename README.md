@@ -77,8 +77,8 @@ starfur/
 
 ```bash
 # 克隆仓库
-git clone https://cnb.cool/starfurr/starfur.git
-cd starfur
+git clone https://github.com/PFLcoolme/DysonNetwork-rust.git
+cd DysonNetwork-rust
 
 # 构建项目
 cargo build
@@ -172,4 +172,4 @@ AGPL-3.0
 
 ## 📧 联系方式
 
-- Repository: https://cnb.cool/starfurr/starfur
+- Repository: https://github.com/PFLcoolme/DysonNetwork-rust

@@ -34,7 +34,7 @@ impl ProductType {
 }
 
 /// 商品状态
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ProductStatus {
     Draft = 0,
     Active = 1,
@@ -64,7 +64,7 @@ impl ProductStatus {
 }
 
 /// 订单状态
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OrderStatus {
     Pending = 0,
     Paid = 1,
@@ -232,6 +232,12 @@ pub struct ApiResponse<T> {
     pub success: bool,
     pub data: Option<T>,
     pub message: Option<String>,
+}
+
+impl<T: Serialize> axum::response::IntoResponse for ApiResponse<T> {
+    fn into_response(self) -> axum::response::Response {
+        axum::Json(self).into_response()
+    }
 }
 
 impl<T> ApiResponse<T> {

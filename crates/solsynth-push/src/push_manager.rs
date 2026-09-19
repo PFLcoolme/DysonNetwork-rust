@@ -2,19 +2,19 @@
 //!
 //! 负责推送通知的调度、重试和状态管理
 
-use anyhow::Result;
 use dashmap::DashMap;
 use std::sync::Arc;
-use tracing::{info, error, warn};
+use tracing::{error, info};
 use uuid::Uuid;
 
-use crate::models::{PushNotification, PushStatus, PushDevice, PushChannel, PushStats};
+use crate::models::{PushDevice, PushNotification, PushStats, PushStatus};
 
 /// 推送管理器
+#[derive(Clone)]
 pub struct PushManager {
     notifications: Arc<DashMap<Uuid, PushNotification>>,
     devices: Arc<DashMap<Uuid, PushDevice>>,
-    stats: PushManagerStats,
+    stats: Arc<PushManagerStats>,
 }
 
 struct PushManagerStats {
@@ -30,12 +30,12 @@ impl PushManager {
         Self {
             notifications: Arc::new(DashMap::new()),
             devices: Arc::new(DashMap::new()),
-            stats: PushManagerStats {
+            stats: Arc::new(PushManagerStats {
                 pending: std::sync::atomic::AtomicU64::new(0),
                 sending: std::sync::atomic::AtomicU64::new(0),
                 sent: std::sync::atomic::AtomicU64::new(0),
                 failed: std::sync::atomic::AtomicU64::new(0),
-            },
+            }),
         }
     }
 

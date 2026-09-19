@@ -3,14 +3,15 @@
 //! 负责订单的创建、更新和状态管理
 
 use anyhow::Result;
-use tracing::{info, error, warn};
+use tracing::{info, warn};
 use uuid::Uuid;
 
 use crate::models::{
-    Order, OrderStatus, PaymentMethod, Product, CreateOrderRequest,
+    Order, OrderStatus, Product, CreateOrderRequest,
 };
 
 /// 订单管理器
+#[derive(Clone)]
 pub struct OrderManager {
     orders: std::sync::Arc<tokio::sync::RwLock<std::collections::HashMap<Uuid, Order>>>,
     products: std::sync::Arc<tokio::sync::RwLock<std::collections::HashMap<Uuid, Product>>>,
@@ -103,7 +104,7 @@ impl OrderManager {
     pub async fn update_order_status(&self, order_id: Uuid, status: OrderStatus) -> Result<Order> {
         let mut orders = self.orders.write().await;
 
-        if let Some(mut order) = orders.get_mut(&order_id) {
+        if let Some(order) = orders.get_mut(&order_id) {
             let old_status = order.status.clone();
             order.status = status.clone();
             order.updated_at = chrono::Utc::now();
@@ -127,7 +128,7 @@ impl OrderManager {
     ) -> Result<Order> {
         let mut orders = self.orders.write().await;
 
-        if let Some(mut order) = orders.get_mut(&order_id) {
+        if let Some(order) = orders.get_mut(&order_id) {
             order.status = OrderStatus::Paid;
             order.payment_intent_id = Some(payment_intent_id);
             order.updated_at = chrono::Utc::now();
@@ -159,7 +160,8 @@ impl OrderManager {
 
     }
 
-    /// 退款    pub async fn refund_order(&self, order_id: Uuid) -> Result<()> {
+    /// 退款
+    pub async fn refund_order(&self, order_id: Uuid) -> Result<()> {
         let mut orders = self.orders.write().await;
 
         if let Some(order) = orders.get_mut(&order_id) {

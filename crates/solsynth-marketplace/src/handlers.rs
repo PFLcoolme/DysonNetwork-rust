@@ -2,9 +2,11 @@
 
 use axum::{
     extract::{Path, Query, State},
-    routing::{get, post, put, delete},
+    routing::{delete, get, post, put},
     Json, Router,
 };
+use serde::Deserialize;
+use tracing::{error, info};
 use uuid::Uuid;
 
 use crate::models::{
@@ -209,8 +211,8 @@ async fn create_payment_intent(
 /// 支付回调 Webhook
 async fn payment_webhook(
     State(state): State<MarketplaceState>,
+    headers: axum::http::HeaderMap,
     body: axum::body::Bytes,
-    axum::extract::HeaderMap headers,
 ) -> impl axum::response::IntoResponse {
     let signature = headers
         .get("stripe-signature")

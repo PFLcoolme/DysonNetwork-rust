@@ -10,6 +10,7 @@ use tracing::info;
 use crate::models::MailTemplate;
 
 /// 模板管理器
+#[derive(Clone)]
 pub struct TemplateManager {
     templates: HashMap<String, MailTemplate>,
 }

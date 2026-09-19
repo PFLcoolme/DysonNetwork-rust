@@ -2,10 +2,13 @@
 //!
 //! 提供文件加密和解密功能
 
+use aes_gcm::{
+    aead::{Aead, AeadCore, KeyInit},
+    Aes256Gcm, Key, Nonce,
+};
 use anyhow::Result;
-use base64::{engine::general_purpose::STD as ENGINE, Engine};
+use base64::{engine::general_purpose::STANDARD as ENGINE, Engine};
 use sha2::{Digest, Sha256};
-use tokio_rustls::rustls::pki_types::PrivateKeyDer;
 use uuid::Uuid;
 
 /// 加密文件元数据
@@ -34,9 +37,10 @@ impl EncryptionKeyManager {
     pub fn generate_key(&self) -> (String, String) {
         let key_id = Uuid::new_v4().to_string();
         let key = (0..32).map(|_| rand::random::<u8>()).collect::<Vec<_>>();
-       
+
         let key_b64 = ENGINE.encode(&key);
- // 实际实现中应该存储到数据库        (key_id, key_b64)
+        // 实际实现中应该存储到数据库
+        (key_id, key_b64)
     }
 
     /// 获取密钥
@@ -63,16 +67,14 @@ pub fn encrypt_file_data(
     plaintext: &[u8],
     encryption_key: &[u8],
 ) -> Result<EncryptedFile> {
-    use aes_gcm::{Aes256Gcm, KeyInit, Key, Nonce};
-    
     if encryption_key.len() != 32 {
         anyhow::bail!("Invalid key length");
     }
 
-    let key: Key<Aes256Gcm> = encryption_key.into();
-    let cipher = Aes256Gcm::new(&key);
-    
-    let nonce = Aes256Gcm::generate_nonce();
+    let key = Key::<Aes256Gcm>::from_slice(encryption_key);
+    let cipher = Aes256Gcm::new(key);
+
+    let nonce = Aes256Gcm::generate_nonce(&mut rand::rngs::OsRng);
     let ciphertext = cipher.encrypt(&nonce, plaintext)?;
     
     // 提取 auth tag (last 16 bytes)
@@ -89,22 +91,20 @@ pub fn encrypt_file_data(
 
 /// 解密文件数据
 pub fn decrypt_file_data(encrypted: &EncryptedFile, encryption_key: &[u8]) -> Result<Vec<u8>> {
-    use aes_gcm::{Aes256Gcm, KeyInit, Key};
-    
     if encryption_key.len() != 32 {
         anyhow::bail!("Invalid key length");
     }
 
-    let key: Key<Aes256Gcm> = encryption_key.into();
-    let cipher = Aes256Gcm::new(&key);
-    
+    let key = Key::<Aes256Gcm>::from_slice(encryption_key);
+    let cipher = Aes256Gcm::new(key);
+
     let nonce = Nonce::from_slice(&encrypted.iv);
-    
+
     // 重组 ciphertext + auth_tag
     let mut ciphertext_with_tag = encrypted.ciphertext.clone();
     ciphertext_with_tag.extend_from_slice(&encrypted.auth_tag);
-    
-    let plaintext = cipher.decrypt(nonce, &ciphertext_with_tag)?;
+
+    let plaintext = cipher.decrypt(nonce, ciphertext_with_tag.as_slice())?;
     Ok(plaintext)
 }
 

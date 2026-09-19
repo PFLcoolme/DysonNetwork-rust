@@ -2,18 +2,15 @@
 
 use axum::{
     extract::{Multipart, Path, Query, State},
-    http::{HeaderMap, StatusCode},
+    http::StatusCode,
     response::IntoResponse,
     routing::{delete, get, post},
     Json, Router,
 };
-use serde::Deserialize;
 use uuid::Uuid;
 
-use crate::models::{
-    ApiResponse, DeleteRequest, FileListQuery, UploadRequest,
-};
-use crate::upload::{StorageConfig, StorageManager};
+use crate::models::{ApiResponse, DeleteRequest, FileListQuery};
+use crate::upload::StorageManager;
 
 /// API 状态
 #[derive(Clone)]
@@ -34,7 +31,7 @@ pub fn routes(state: StorageState) -> Router {
 
 /// 上传文件处理
 async fn handle_upload(
-    State(state): State<StorageState>,
+    State(_state): State<StorageState>,
     mut form: Multipart,
 ) -> impl IntoResponse {
     while let Some(field) = form.next_field().await.ok().flatten() {
@@ -46,8 +43,8 @@ async fn handle_upload(
                 tracing::info!("Upload folder: {}", String::from_utf8_lossy(&data));
             }
             "file" => {
-                tracing::info!("Upload
-            file size: {}", data.len()); }
+                tracing::info!("Upload file size: {}", data.len());
+            }
             _ => {}
         }
     }
@@ -127,6 +124,7 @@ async fn handle_metadata(
         "owner_id": owner_id,
         "size": metadata.len(),
     }))
+    .into_response()
 }
 
 /// 文件列表
@@ -151,21 +149,25 @@ async fn handle_delete(
 
     for file_id_str in &req.file_ids {
         if let Ok(file_id) = Uuid::parse_str(file_id_str) {
-            let owner_dirs = match tokio::fs::read_dir(&state.storage_manager.config.storage_root.join("files")).await {
+            let mut owner_dirs = match tokio::fs::read_dir(&state.storage_manager.config.storage_root.join("files")).await {
                 Ok(d) => d,
                 Err(_) => continue,
             };
 
-            for entry in await_entries(&owner_dirs).await {
-                if let Ok(entry) = entry {
-                    let owner_id = entry.path();
-                    let file_path = owner_id.join(format!("{}.dat", file_id));
-                    if file_path.exists() {
-                        if let Err(e) = tokio::fs::remove_file(&file_path).await {
-                            tracing::error!("Failed to delete file: {}", e);
-                        } else {
-                            deleted_count += 1;
-                        }
+            while let Some(entry) = owner_dirs.next_entry().await.transpose() {
+                let entry = match entry {
+                    Ok(entry) => entry,
+                    Err(e) => {
+                        tracing::error!("Failed to read directory entry: {}", e);
+                        continue;
+                    }
+                };
+                let file_path = entry.path().join(format!("{}.dat", file_id));
+                if file_path.exists() {
+                    if let Err(e) = tokio::fs::remove_file(&file_path).await {
+                        tracing::error!("Failed to delete file: {}", e);
+                    } else {
+                        deleted_count += 1;
                     }
                 }
             }
@@ -176,15 +178,4 @@ async fn handle_delete(
         "deleted_count": deleted_count,
         "total_requested": req.file_ids.len(),
     }))
-}
-
-async fn await_entries(
-    dir: &tokio::fs::ReadDir,
-) -> Vec<std::io::Result<tokio::fs::DirEntry>> {
-    let mut entries = Vec::new();
-    for entry in dir.clone() {
-        entries.push(entry);
-
-    }
-    entries
 }

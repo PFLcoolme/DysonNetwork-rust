@@ -3,12 +3,14 @@
 //! 负责与 Stripe 等支付网关集成
 
 use anyhow::Result;
-use tracing::{info, error};
+use tracing::info;
 use uuid::Uuid;
 
-use crate::models::{Order, OrderStatus, PaymentResponse};
+use crate::models::{Order, PaymentResponse};
 
 /// 支付管理器
+#[derive(Clone)]
+#[allow(dead_code)]
 pub struct PaymentManager {
     stripe_secret_key: String,
     confirmed_payments: std::sync::Arc<tokio::sync::RwLock<std::collections::HashMap<String, Uuid>>>,
@@ -62,7 +64,7 @@ impl PaymentManager {
     pub async fn handle_payment_webhook(
         &self,
         payload: &[u8],
-        signature: &str,
+        _signature: &str,
     ) -> Result<PaymentEvent> {
        
 
@@ -91,7 +93,7 @@ impl PaymentManager {
     }
 
     /// 获取支付状态
-    pub async fn get_payment_status(&self, payment_intent_id: &str) -> Result<String> {
+    pub async fn get_payment_status(&self, _payment_intent_id: &str) -> Result<String> {
         Ok("succeeded".to_string())
     }
 }

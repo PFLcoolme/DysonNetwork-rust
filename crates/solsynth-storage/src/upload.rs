@@ -5,10 +5,9 @@ use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::Read;
 use std::path::PathBuf;
-use tokio::fs::AsyncReadExt;
 use uuid::Uuid;
 
-use crate::models::{FileMetadata, FileStatus, FileType, StorageQuota};
+use crate::models::{FileType, StorageQuota};
 
 /// 存储配置
 #[derive(Clone)]
@@ -63,8 +62,8 @@ impl StorageManager {
     pub async fn calculate_checksum(path: &PathBuf) -> Result<String> {
         let mut file = fs::File::open(path)?;
         let mut buffer = Vec::new();
-        file
-       .read_to_end(&mut buffer)?; let mut hasher = Sha256::new();
+        file.read_to_end(&mut buffer)?;
+        let mut hasher = Sha256::new();
         hasher.update(&buffer);
         Ok(hex::encode(hasher.finalize()))
     }
